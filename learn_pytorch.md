@@ -1103,29 +1103,123 @@ print(bias)
 
 ## 3.2. 线性回归的从零开始实现
 
-
-
-
-
-
-
-
-
-
+```
+#3.2  线性回归从零开始
+#在这一节中，我们将只使用张量和自动求导。 在之后的章节中，我们会充分利用深度学习框架的优势，介绍更简洁的实现方式。
+import random  #pytho中的随机生成函数
+```
 
 ### 3.2.1. 生成数据集
 
+```py
+#3.2  线性回归从零开始
+#在这一节中，我们将只使用张量和自动求导。 在之后的章节中，我们会充分利用深度学习框架的优势，介绍更简洁的实现方式。
+import random  #pytho中的随机生成函数
+# 在下面的代码中，我们生成一个包含1000个样本的数据集， 每个样本包含从标准正态分布中采样的2个特征。 我们的合成数据集是一个矩阵。
+#下面的代码生成合成数据集。
+def synthetic_data(w,b,num_examples):#@save
+    '''生成y=Xw+b+噪声'''
+    X=torch.normal(0,1,(num_examples,len(w)))  #生成 num_examples*len(x）列  服从（0，1）的正态分布
+    y=torch.matmul(X,w)+b#torch.matmul是tensor的乘法，输入可以是高维的。\
+    y+=torch.normal(0,0.01,y.shape)
+ #   print(y.shape,y.reshape((-1,1)).shape)  1000   1000*1
+    return X,y.reshape((-1,1))
+true_w=torch.tensor([2,-3.4])
+true_b=4.2
+features,labels=synthetic_data(true_w,true_b,1000)
+
+d2l.set_figsize()
+d2l.plt.scatter(features[:, 1].detach().numpy(), labels.detach().numpy(), 1);
+
+```
+
+
+
 ### 3.2.2. 读取数据集
+
+```py
+#3.2.2读取数据集
+#我们定义一个data_iter函数， 该函数接收批量大小、特征矩阵和标签向量作为输入，生成大小为batch_size的小批量。 每个小批量包含一组特征和标签。
+len(features)
+def data_iter(batch_size, features, labels):
+    num_examples = len(features)
+    indices = list(range(num_examples))
+    # 这些样本是随机读取的，没有特定的顺序
+    random.shuffle(indices)
+    for i in range(0, num_examples, batch_size):
+        batch_indices = torch.tensor(
+            indices[i: min(i + batch_size, num_examples)])
+        yield features[batch_indices], labels[batch_indices]
+batch_size=10
+for X,y in data_iter(batch_size,features,labels):
+    print(X,'\n',y)
+    
+```
+
+
 
 ### 3.2.3. 初始化模型参数
 
+```py
+#3.2.3
+#在我们开始用小批量随机梯度下降优化我们的模型参数之前， 我们需要先有一些参数。 在下面的代码中，我们通过从均值为0、标准差为0.01的正态分布中采样随机数来初始化权重， 并将偏置初始化为0。
+w=torch.normal(0,0.01,(2,1),requires_grad=True)  #requires_grad=True 的作用是让 backward 可以追踪这个参数并且计算它的梯度。最开始定义你的输入是 requires_grad=True ，那么后续对应的输出也自动具有 requires_grad=True ，如代码中的 y 和 z ，而与 z 对 x 求导无关联的 a ，其 requires_grad 仍等于 False。
+b=torch.zeros(1,requires_grad=True)
+
+```
+
+
+
 ### 3.2.4. 定义模型
+
+```py
+def linreg(X,w,b):#@save
+    return torch.matmul(X,w)+b
+```
+
+
 
 ### 3.2.5. 定义损失函数
 
+```py
+def squared_loss(y_hat, y):  #@save
+    """均方损失"""
+    return (y_hat - y.reshape(y_hat.shape)) ** 2 / 2
+```
+
+
+
 ### 3.2.6. 定义优化算法
 
+```py
+def sgd(params, lr, batch_size):  #@save
+    """小批量随机梯度下降"""
+    for param in params:
+        param[:] = param - lr * param.grad / batch_size
+```
+
+
+
 ### 3.2.7. 训练
+
+```py
+lr = 0.03
+num_epochs = 3
+net = linreg
+loss = squared_loss
+
+for epoch in range(num_epochs):
+    for X, y in data_iter(batch_size, features, labels):
+        with autograd.record():
+            l = loss(net(X, w, b), y)  # X和y的小批量损失
+        # 计算l关于[w,b]的梯度
+        l.backward()
+        sgd([w, b], lr, batch_size)  # 使用参数的梯度更新参数
+    train_l = loss(net(features, w, b), labels)
+    print(f'epoch {epoch + 1}, loss {float(train_l.mean()):f}')
+```
+
+
 
 ### 3.2.8. 小结
 
@@ -1149,31 +1243,209 @@ print(bias)
 
 ### 3.3.8. 小结
 
+```py
+import numpy as np
+import torch
+from torch.utils import data
+from d2l import torch as d2l
+# 生成数据及
+true_w = torch.tensor([2, -3.4])
+true_b = 4.2
+features, labels = d2l.synthetic_data(true_w, true_b, 1000)
+#获取数据集
+from torch.utils.data import DataLoader   #s数据加载器
+from torch.utils.data import Dataset #加载数据集  yonmg
+from torch.utils.data import TensorDataset  #对数据集进行封装 将数据包装成Dataset类
+def load_array(data_arrays, batch_size, is_train=True):  #@save
+    """构造一个PyTorch数据迭代器"""
+    dataset =TensorDataset(*data_arrays)
+    return DataLoader(dataset, batch_size, shuffle=is_train)
+batch_size = 10
+data_iter = load_array((features, labels), batch_size)
+#data_iter=DataLoader(TensorDataset(features,lables),batch_size,shuffle=True)
+#这一段代买可以代替上面一句话
+# 定义模型 nn是神经网络的缩写
+from torch import nn
+net = nn.Sequential(nn.Linear(2, 1))
+#初始化模型参数
+net[0].weight.data.normal_(0, 0.01)
+net[0].bias.data.fill_(0)
+#定义损失函数
+loss = nn.MSELoss()
+#定义优化算法
+trainer = torch.optim.SGD(net.parameters(), lr=0.03)
+#训练
+num_epochs = 3
+for epoch in range(num_epochs):
+    for X, y in data_iter:
+        l = loss(net(X) ,y)
+        trainer.zero_grad()
+        l.backward()
+        trainer.step()
+    l = loss(net(features), labels)
+    print(f'epoch {epoch + 1}, loss {l:f}')
+    num_epochs = 3
+for epoch in range(num_epochs):
+    for X, y in data_iter:
+        l = loss(net(X) ,y)
+        trainer.zero_grad()
+        l.backward()
+        trainer.step()
+    l = loss(net(features), labels)
+    print(f'epoch {epoch + 1}, loss {l:f}')
+```
+
+
+
 ### 3.3.9. 练习、、
 
 ## 3.4. softmax回归
 
 ### 3.4.1. 分类问题
 
+但是一般的分类问题并不与类别之间的自然顺序有关。 幸运的是，统计学家很早以前就发明了一种表示分类数据的简单方法：*独热编码*（one-hot encoding）
+
+独热编码是一个向量，它的分量和类别一样多。 类别对应的分量设置为1，其他所有分量设置为0。 在我们的例子中，标签y将是一个三维向量， 其中(1,0,0)对应于“猫”、(0,1,0)对应于“鸡”、(0,0,1)对应于“狗”：
+
+![image-20221020200058488](C:\Users\86183\AppData\Roaming\Typora\typora-user-images\image-20221020200058488.png)
+
 ### 3.4.2. 网络架构
 
-### 3.4.3. 全连接层的参数开销[3.4.4. softmax运算
+![image-20221020200258001](C:\Users\86183\AppData\Roaming\Typora\typora-user-images\image-20221020200258001.png)
+
+![image-20221020200310080](C:\Users\86183\AppData\Roaming\Typora\typora-user-images\image-20221020200310080.png)
+
+
+
+### 3.4.3. 全连接层的参数开销
+
+输入D输出Q 参数开销为D*Q  ,如果超参数为N，那么参数开销可以减小为![image-20221020200850941](C:\Users\86183\AppData\Roaming\Typora\typora-user-images\image-20221020200850941.png)
+
+其中超参数n可以由我们灵活指定，以在实际应用中平衡参数节约和模型有效性。
+
+### 3.4.4. softmax运算
+
+要将输出视为概率，我们必须保证在任何数据上的输出都是非负的且总和为1。此外，我们需要一个训练的目标函数，来激励模型精准地估计概率。
+
+*softmax函数*正是这样做的： softmax函数能够将未规范化的预测变换为非负数并且总和为1，同时让模型保持 可导的性质。
+
+为了完成这一目标，我们首先对每个未规范化的预测求幂，这样可以确保输出非负。 为了确保最终输出的概率值总和为1，我们再让每个求幂后的结果除以它们的总和。如下式：
+
+![image-20221020201600481](C:\Users\86183\AppData\Roaming\Typora\typora-user-images\image-20221020201600481.png)
+
+尽管softmax是一个非线性函数，但softmax回归的输出仍然由输入特征的仿射变换决定。 因此，softmax回归是一个*线性模型*（linear model）。
 
 ### 3.4.5. 小批量样本的矢量化
 
+O=XW+b  Y^=softmax(O)
+
+X(n×d) W(d×q) b()
+
+为了提高计算效率并且充分利用GPU，我们通常会对小批量样本的数据执行矢量计算。 假设我们读取了一个批量的样本X， 其中特征维度（输入数量）为d，批量大小为n。 此外，假设我们在输出中有q个类别。 那么小批量样本的特征为X∈Rn×d， 权重为W∈Rd×q， 偏置为b∈R1×q。 softmax回归的矢量计算表达式为：
+
+![image-20221020203024201](C:\Users\86183\AppData\Roaming\Typora\typora-user-images\image-20221020203024201.png)
+
+
+
+
+
 ### 3.4.6. 损失函数
+
+最大似然估计
+
+#### 3.4.6.1. 对数似然
+
+![image-20221020210151903](C:\Users\86183\AppData\Roaming\Typora\typora-user-images\image-20221020210151903.png)
+
+#### 3.4.6.2. softmax及其导数
+
+
+
+![image-20221020210546329](C:\Users\86183\AppData\Roaming\Typora\typora-user-images\image-20221020210546329.png)
+
+### 3.4.6.3. 交叉熵损失
+
+交叉熵顺势是非类问题中最常犯烤炉的损失：=所有标签分布的预期损失值
 
 ### 3.4.7. 信息论基础
 
+#### 3.4.7.1. 熵
+
+
+
 ### 3.4.8. 模型预测和评估
+
+
 
 ### 3.4.9. 小结
 
+
+
 ### 3.4.10. 练习
+
+
 
 ## 3.5. 图像分类数据集
 
 ### 3.5.1. 读取数据集
+
+![image-20221020214535284](C:\Users\86183\AppData\Roaming\Typora\typora-user-images\image-20221020214535284.png)
+
+mnist_train[0]  代表T恤 mnist_train[0][0]代表T恤的第一个图片
+
+```py
+#3,5图像分类数据集
+%matplotlib inline
+import torch
+import torchvision
+from torch.utils import data
+from torchvision  import transforms
+from d2l import torch as d2l
+d2l.use_svg_display()
+
+#读取数据集  似但更复杂的Fashion-MNIST数据集
+# 通过ToTensor实例将图像数据从PIL类型变换成32位浮点数格式，
+# 并除以255使得所有像素的数值均在0到1之间
+trans=transforms.ToTensor()  #将图像从 pil转为32为浮点数
+mnist_train=torchvision.datasets.FashionMNIST(root='../data',train=True,transform=trans,download=True)
+mnist_test=torchvision.datasets.FashionMNIST(root='../data',train=False,transform=trans,download=True)
+```
+
+```py
+len(mnist_train),len(mnist_test)
+mnist_train[0][0].shape
+#以下函数用于在数字标签索引及其文本名称之间进行转换。
+def get_fashion_mnist_labels(labels):  #@save
+    """返回Fashion-MNIST数据集的文本标签"""
+    text_labels = ['t-shirt', 'trouser', 'pullover', 'dress', 'coat',
+                   'sandal', 'shirt', 'sneaker', 'bag', 'ankle boot']
+    return [text_labels[int(i)] for i in labels]
+#创建一个函数来可视化这些样本
+def show_images(imgs, num_rows, num_cols, titles=None, scale=1.5):  #@save
+    """绘制图像列表"""
+    figsize = (num_cols * scale, num_rows * scale)
+    _, axes = d2l.plt.subplots(num_rows, num_cols, figsize=figsize)
+    axes = axes.flatten()
+    for i, (ax, img) in enumerate(zip(axes, imgs)):
+        if torch.is_tensor(img):
+            # 图片张量
+            ax.imshow(img.numpy())
+        else:
+            # PIL图片
+            ax.imshow(img)
+        ax.axes.get_xaxis().set_visible(False)
+        ax.axes.get_yaxis().set_visible(False)
+        if titles:
+            ax.set_title(titles[i])
+    return axes
+#以下是训练数据集中前几个样本的图像及其相应的标签。
+X, y = next(iter(data.DataLoader(mnist_train, batch_size=18)))
+show_images(X.reshape(18, 28, 28), 2, 9, titles=get_fashion_mnist_labels(y));
+#2行9列
+
+```
+
+
 
 ### 3.5.2. 读取小批量
 
